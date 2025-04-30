@@ -3,16 +3,28 @@ const mongoose = require('mongoose');
 const RequestSchema = new mongoose.Schema({
   userId: { type: String, required: true },
   username: { type: String, required: true },
-  photoBuffer: { type: Buffer },
-  photoContentType: { type: String },
-  description: { type: String },
-  createdAt: { type: Date, default: Date.now },
+  firstName: { type: String, default: '' },
+  lastName: { type: String, default: '' },
+  languageCode: { type: String, default: '' },
+  isBot: { type: Boolean, default: false },
+  location: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      required: false,
+    },
+    coordinates: {
+      type: [Number],
+      required: false,
+    },
+  },
+  photoBuffer: Buffer,
+  photoContentType: String,
+  description: String,
+  isCompleted: { type: Boolean, default: false },
+  chatId: { type: Number, required: true }, // Обязательное поле
+  messageId: { type: Number }, // Опциональное поле
+  createdAt: { type: Date, default: Date.now }
 });
-
-module.exports = mongoose.model('Request', RequestSchema);
-
-
-// Логируем успешную компиляцию модели
-console.log('[MongoDB] Request модель инициализирована');
 
 module.exports = mongoose.model('Request', RequestSchema);
