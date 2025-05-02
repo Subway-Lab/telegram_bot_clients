@@ -63,8 +63,22 @@ redis.on('message', async (channel, message) => {
     // Отправляем описание в OpenAI для генерации ответа
     const response = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
-      messages: [{ role: 'user', content: finalMessage }],
+      messages: [
+        {
+          role: 'system',
+          content: `Ты — ассистент по оценке авто для СТО. 
+          - Сначала определи марку и модель машины из описаний.
+          - Опиши все видимые повреждения на фото.
+          - Предположи возможные скрытые повреждения (например, внутри дверей, в раме и т.д.).
+          - Дай итоговую оценку и предложи примерный список работ.`,
+        },
+        {
+          role: 'user',
+          content: `Вот сводка сообщений от клиента (хронологически):\n${finalMessage}\n\nСформируй единый пост для СТО по указанному шаблону.`,
+        }
+      ],
     });
+    
 
     console.log('Ответ от GPT:', response.choices[0].message.content);
     // TODO: здесь можно отправить ответ в Telegram
