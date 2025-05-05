@@ -1,1 +1,2 @@
 .env
+node_modules/aws-sdk/apis/sso-oidc-2019-06-10.examples.json
