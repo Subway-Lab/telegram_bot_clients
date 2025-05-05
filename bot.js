@@ -161,3 +161,21 @@ bot.on('text', async (ctx) => {
 bot.launch().then(() => console.log('🤖 Бот запущен')).catch((err) => console.error('🚨 Ошибка запуска:', err));
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
+
+
+// ========================
+// Подключение Main Menu
+// ========================
+bot.telegram.setMyCommands([
+  { command: 'support', description: 'Оценить стоимость ремонта' },
+  { command: 'how', description: 'Вызвать эвакуатор' },
+  { command: 'stub3', description: 'Как работает это бот?' },
+  { command: 'stub4', description: 'Обратиться в поддержку' },
+]);
+
+bot.telegram.setChatMenuButton({
+  menu_button: {
+    type: 'commands'
+  }
+});
+
