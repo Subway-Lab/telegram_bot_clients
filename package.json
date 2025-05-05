@@ -10,10 +10,13 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.802.0",
+    "aws-sdk": "^2.1692.0",
     "axios": "^1.9.0",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "ioredis": "^5.6.1",
+    "mime-types": "^3.0.1",
     "mongoose": "^8.14.1",
     "openai": "^4.96.2",
     "telegraf": "^4.16.3"

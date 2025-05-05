@@ -5,6 +5,7 @@ const mime = require('mime-types');
 const mongoose = require('mongoose');
 const connectDB = require('./db');
 const Request = require('./models/Request');
+const uploadBuffer = require('./services/uploadPhoto'); // Для загрузки фото в DigitalOcean Spaces
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
@@ -38,6 +39,7 @@ const getFilePath = async (fileId) => {
 const downloadPhoto = async (filePath) => {
   try {
     const url = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${filePath}`;
+    console.log('[downloadPhoto] Скачиваем фото по URL:', url);
     const res = await axios.get(url, { responseType: 'arraybuffer' });
     return {
       buffer: Buffer.from(res.data),
@@ -53,24 +55,12 @@ const downloadPhoto = async (filePath) => {
 // Обработчики контента
 // ========================
 const handleRequest = async (ctx, content) => {
-  const { 
-    id, 
-    username, 
-    first_name, 
-    last_name, 
-    language_code, 
-    is_bot 
-  } = ctx.from;
+  const { id, username, first_name, last_name, language_code, is_bot } = ctx.from;
   const location = ctx.message.location;
 
   try {
-    // Находим предыдущие незавершенные заявки
-    const previousRequests = await Request.find({
-      chatId: ctx.chat.id,
-      isCompleted: false
-    });
+    const previousRequests = await Request.find({ chatId: ctx.chat.id, isCompleted: false });
 
-    // Удаляем только сообщения в Telegram
     await Promise.all(previousRequests.map(async (req) => {
       try {
         await ctx.deleteMessage(req.messageId);
@@ -80,44 +70,30 @@ const handleRequest = async (ctx, content) => {
       }
     }));
 
-    // Создаем новую заявку
-    const request = new Request({
+    const requestData = {
       userId: id.toString(),
       username: username || 'unknown',
       firstName: first_name || '',
       lastName: last_name || '',
       languageCode: language_code || '',
       isBot: is_bot || false,
-      ...(location ? {
-        location: {
-          type: 'Point',
-          coordinates: [location.longitude, location.latitude],
-        },
-      } : {}),
+      ...(location ? { location: { type: 'Point', coordinates: [location.longitude, location.latitude] } } : {}),
       chatId: ctx.chat.id,
-      messageId: null, // Временно null
+      messageId: null,
       ...content,
       isCompleted: false,
-      createdAt: new Date()
-    });
+      createdAt: new Date(),
+    };
 
-    // Сохраняем заявку в БД
+    const request = new Request(requestData);
     const savedRequest = await request.save();
 
-    // Отправляем новое сообщение с кнопкой
     const msg = await ctx.reply(
       '✅ Сообщение сохранено!\nПосле завершения отправки информации нажмите:',
-      Markup.inlineKeyboard([
-        Markup.button.callback('📨 Отправить заявку', 'SUBMIT_REQUEST')
-      ])
+      Markup.inlineKeyboard([Markup.button.callback('📨 Отправить заявку', 'SUBMIT_REQUEST')])
     );
 
-    // Обновляем messageId в БД
-    await Request.updateOne(
-      { _id: savedRequest._id },
-      { messageId: msg.message_id }
-    );
-
+    await Request.updateOne({ _id: savedRequest._id }, { messageId: msg.message_id });
     console.log(`[SAVED] Новая заявка ${savedRequest._id}`);
 
   } catch (error) {
@@ -131,20 +107,8 @@ const handleRequest = async (ctx, content) => {
 // ========================
 bot.action('SUBMIT_REQUEST', async (ctx) => {
   try {
-    // Помечаем ВСЕ заявки в чате как завершенные
-    const result = await Request.updateMany(
-      { 
-        chatId: ctx.chat.id,
-        isCompleted: false 
-      },
-      { isCompleted: true }
-    );
-
-    // Удаляем все сообщения с кнопками
-    const requests = await Request.find({ 
-      chatId: ctx.chat.id,
-      isCompleted: true // Теперь они помечены как завершенные
-    });
+    const result = await Request.updateMany({ chatId: ctx.chat.id, isCompleted: false }, { isCompleted: true });
+    const requests = await Request.find({ chatId: ctx.chat.id, isCompleted: true });
 
     await Promise.all(requests.map(async (req) => {
       try {
@@ -156,7 +120,6 @@ bot.action('SUBMIT_REQUEST', async (ctx) => {
     }));
 
     ctx.answerCbQuery(`✅ Отправлено заявок: ${result.modifiedCount}`);
-
   } catch (error) {
     console.error('[SUBMIT] Ошибка:', error);
     ctx.answerCbQuery('🚨 Ошибка при отправке');
@@ -171,11 +134,15 @@ bot.on('photo', async (ctx) => {
   try {
     const filePath = await getFilePath(fileId);
     const { buffer, contentType } = await downloadPhoto(filePath);
-    
-    await handleRequest(ctx, {
-      photoBuffer: buffer,
-      photoContentType: contentType
-    });
+
+    // Загрузка фото в DigitalOcean Spaces
+    const key = `${ctx.chat.id}/${Date.now()}.jpg`;
+    console.log('[photo] Загружаем фото в Spaces с ключом:', key);
+    const imageUrl = await uploadBuffer(buffer, key);
+    console.log('[photo] Фото доступно по URL:', imageUrl);
+
+    // Сохраняем в MongoDB вместе с photoBuffer и URL
+    await handleRequest(ctx, { photoBuffer: buffer, photoContentType: contentType, imageUrl });
 
   } catch (error) {
     console.error('[photo] Ошибка:', error.message);
@@ -185,59 +152,12 @@ bot.on('photo', async (ctx) => {
 
 // Обработка текста
 bot.on('text', async (ctx) => {
-  await handleRequest(ctx, {
-    description: ctx.message.text
-  });
-});
-
-// ========================
-// Обработчик кнопки
-// ========================
-bot.action('SUBMIT_REQUEST', async (ctx) => {
-  try {
-    // Обновляем ВСЕ незавершенные заявки в этом чате
-    const result = await Request.updateMany(
-      { 
-        chatId: ctx.chat.id,
-        isCompleted: false 
-      },
-      { isCompleted: true }
-    );
-
-    if (result.modifiedCount === 0) {
-      return ctx.answerCbQuery('⚠️ Нет заявок для отправки!');
-    }
-
-    // Убираем кнопку во ВСЕХ сообщениях этого чата
-    const requests = await Request.find({ chatId: ctx.chat.id });
-    await Promise.all(requests.map(async (req) => {
-      try {
-        await ctx.telegram.editMessageReplyMarkup(
-          req.chatId,
-          req.messageId,
-          undefined,
-          { inline_keyboard: [] }
-        );
-      } catch (e) {
-        console.error('Ошибка редактирования сообщения:', e.message);
-      }
-    }));
-
-    ctx.answerCbQuery(`✅ Отправлено заявок: ${result.modifiedCount}`);
-
-  } catch (error) {
-    console.error('[SUBMIT] Ошибка:', error);
-    ctx.answerCbQuery('🚨 Ошибка при отправке');
-  }
+  await handleRequest(ctx, { description: ctx.message.text });
 });
 
 // ========================
 // Запуск бота
 // ========================
-bot.launch()
-  .then(() => console.log('🤖 Бот запущен'))
-  .catch((err) => console.error('🚨 Ошибка запуска:', err));
-
-// Обработка завершения работы
+bot.launch().then(() => console.log('🤖 Бот запущен')).catch((err) => console.error('🚨 Ошибка запуска:', err));
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
