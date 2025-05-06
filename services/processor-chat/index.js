@@ -4,6 +4,18 @@ const Redis = require('ioredis');
 const mongoose = require('mongoose');
 const Request = require('../../models/Request'); // проверь путь, если нужно поправить
 
+const { S3Client, ListObjectsV2Command } = require('@aws-sdk/client-s3');
+
+const s3 = new S3Client({
+  region: process.env.SPACES_REGION,
+  endpoint: process.env.SPACES_ENDPOINT,
+  credentials: {
+    accessKeyId: process.env.SPACES_KEY,
+    secretAccessKey: process.env.SPACES_SECRET,
+  },
+});
+
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,  // Ключ API
 });
@@ -20,6 +32,25 @@ mongoose.connect(MONGO_URI)
 const redis = new Redis(REDIS_URL);
 redis.on('error', (err) => console.error('❌ Redis ошибка:', err));
 redis.on('connect', () => console.log('✅ Подключено к Redis'));
+
+(async () => {
+  try {
+    const data = await s3.send(new ListObjectsV2Command({
+      Bucket: process.env.SPACES_BUCKET,
+      MaxKeys: 5, // можно поменять
+    }));
+
+    console.log('📸 Файлы в Spaces:');
+    if (data.Contents) {
+      data.Contents.forEach(obj => console.log(' -', obj.Key));
+    } else {
+      console.log('❌ Файлы не найдены в Spaces');
+    }
+  } catch (err) {
+    console.error('❌ Ошибка доступа к DigitalOcean Spaces:', err.message);
+  }
+})();
+
 
 // Подписка на канал Redis
 redis.subscribe('new_request', (err) => {
