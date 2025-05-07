@@ -20,6 +20,7 @@ const RequestSchema = new mongoose.Schema({
   },
   photoBuffer: Buffer,
   photoContentType: String,
+  imageUrl: { type: String, required: false },
   description: String,
   isCompleted: { type: Boolean, default: false },
   chatId: { type: Number, required: true }, // Обязательное поле
