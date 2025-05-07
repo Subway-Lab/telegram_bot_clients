@@ -120,10 +120,12 @@ bot.action('SUBMIT_REQUEST', async (ctx) => {
     );
     console.log(`[SUBMIT] Помечено выполненными: ${result.modifiedCount}`);
 
-    // 2) Достаём все завершённые заявки
+    // 2) Достаём все завершённые заявки, исключая бинарные поля
     const completed = await Request.find(
-      { chatId: ctx.chat.id, isCompleted: true }
+      { chatId: ctx.chat.id, isCompleted: true },
+      { photoBuffer: 0, photoContentType: 0 }
     ).lean();
+
 
     // 3) Публикуем полный JSON в Redis
     const payload = JSON.stringify(completed);
