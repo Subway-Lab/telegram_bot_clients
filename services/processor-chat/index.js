@@ -60,37 +60,37 @@ redis.subscribe('new_request', (err) => {
     console.log('📡 Слушаем Redis: канал new_request');
   }
 });
-
-// Обработка входящих сообщений
 redis.on('message', async (channel, message) => {
-  console.log(`📩 Получено сообщение из канала ${channel}: ${message}`);
-  console.log('🧠 Вошли в message handler');
+  console.log(`📩 Получено от bot.js в канале ${channel}`);
+  console.log('▶ raw payload:', message);
 
-  const chatId = message.trim();
-  if (!chatId) {
-    console.warn('⚠️ Пустой chatId. Прерываем обработку.');
+  let requests;
+  try {
+    requests = JSON.parse(message);
+  } catch (e) {
+    console.error('❌ Не удалось распарсить JSON из Redis:', e.message);
     return;
   }
 
+  if (!Array.isArray(requests) || !requests.length) {
+    console.warn('⚠️ Пустой список заявок. Прерываем обработку.');
+    return;
+  }
+
+  // Логируем нужные поля: description и imageUrl
+  console.log(`📦 Получено ${requests.length} заявок. Детали:`);
+  requests.forEach((req, idx) => {
+    console.log(`  ${idx + 1}. description: "${req.description || '—'}", imageUrl: ${req.imageUrl || '—'}`);
+  });
+
+  // Собираем единый текст для GPT
+  const fullDescription = requests
+    .map((req, idx) => `- ${req.description || ('[пусто ' + (idx + 1) + ']')}`)
+    .join('\n');
+  const finalMessage = `📝 Общая заявка для GPT:\n${fullDescription}`;
+  console.log(finalMessage);
+
   try {
-    // Найдём все заявки с этим chatId
-    const requests = await Request.find({ chatId }).sort({ createdAt: 1 });
-
-    if (!requests.length) {
-      console.log(`⚠️ Заявки с chatId "${chatId}" не найдены.`);
-      return;
-    }
-
-    console.log(`📦 Найдено ${requests.length} сообщений для chatId ${chatId}`);
-
-    // Объединяем все description в одно поле
-    const fullDescription = requests
-      .map((req, index) => `- ${req.description || `[пусто ${index + 1}]`}`)
-      .join('\n');
-
-    const finalMessage = `📝 Общая заявка для GPT:\n${fullDescription}`;
-    console.log(finalMessage);
-
     // Отправляем описание в OpenAI для генерации ответа
     const response = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
@@ -109,7 +109,6 @@ redis.on('message', async (channel, message) => {
         }
       ],
     });
-    
 
     console.log('Ответ от GPT:', response.choices[0].message.content);
     // TODO: здесь можно отправить ответ в Telegram
@@ -117,4 +116,4 @@ redis.on('message', async (channel, message) => {
   } catch (error) {
     console.error('❌ Ошибка при обработке заявки:', error);
   }
-});
+}); // ← Вот она, спасительная скобка!

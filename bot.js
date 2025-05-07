@@ -1,11 +1,17 @@
 require('dotenv').config();
+const Redis = require('ioredis');                              // ← Новый импорт
+const redis = new Redis(process.env.REDIS_URL);                // ← Инициализация
+redis.on('connect', () => console.log('✅ Redis (bot.js) подключён'));
+redis.on('error', err => console.error('❌ Redis (bot.js) ошибка:', err));
+
 const { Telegraf, Markup } = require('telegraf');
 const axios = require('axios');
 const mime = require('mime-types');
 const mongoose = require('mongoose');
 const connectDB = require('./db');
 const Request = require('./models/Request');
-const uploadBuffer = require('./services/uploadPhoto'); // Для загрузки фото в DigitalOcean Spaces
+const uploadBuffer = require('./services/uploadPhoto');
+
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
@@ -107,10 +113,25 @@ const handleRequest = async (ctx, content) => {
 // ========================
 bot.action('SUBMIT_REQUEST', async (ctx) => {
   try {
-    const result = await Request.updateMany({ chatId: ctx.chat.id, isCompleted: false }, { isCompleted: true });
-    const requests = await Request.find({ chatId: ctx.chat.id, isCompleted: true });
+    // 1) Отмечаем заявки как выполненные
+    const result = await Request.updateMany(
+      { chatId: ctx.chat.id, isCompleted: false },
+      { isCompleted: true }
+    );
+    console.log(`[SUBMIT] Помечено выполненными: ${result.modifiedCount}`);
 
-    await Promise.all(requests.map(async (req) => {
+    // 2) Достаём все завершённые заявки
+    const completed = await Request.find(
+      { chatId: ctx.chat.id, isCompleted: true }
+    ).lean();
+
+    // 3) Публикуем полный JSON в Redis
+    const payload = JSON.stringify(completed);
+    await redis.publish('new_request', payload);
+    console.log('[REDIS ▶] Опубликован payload в канал new_request:', payload);
+
+    // 4) Удаляем старые сообщения из чата
+    await Promise.all(completed.map(async (req) => {
       try {
         await ctx.deleteMessage(req.messageId);
         console.log(`[SUBMIT] Удалено сообщение ${req.messageId}`);
@@ -119,12 +140,14 @@ bot.action('SUBMIT_REQUEST', async (ctx) => {
       }
     }));
 
+    // 5) Отправляем ответ пользователю
     ctx.answerCbQuery(`✅ Отправлено заявок: ${result.modifiedCount}`);
   } catch (error) {
     console.error('[SUBMIT] Ошибка:', error);
     ctx.answerCbQuery('🚨 Ошибка при отправке');
   }
 });
+
 
 // Обработка фото
 bot.on('photo', async (ctx) => {
