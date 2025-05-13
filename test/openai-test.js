@@ -8,7 +8,7 @@ const openai = new OpenAI({
 async function testOpenAI() {
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-40',
       messages: [{ role: 'user', content: 'Привет, GPT!' }],
     });
     console.log('Ответ от OpenAI:', response.choices[0].message.content);

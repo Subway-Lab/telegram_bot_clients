@@ -100,7 +100,7 @@ const handleRequest = async (ctx, content) => {
     );
 
     await Request.updateOne({ _id: savedRequest._id }, { messageId: msg.message_id });
-    console.log(`[SAVED] Новая заявка ${savedRequest._id}`);
+    console.log(`[SAVED] Новое сообщение ${savedRequest._id}`);
 
   } catch (error) {
     console.error('[handleRequest] Ошибка:', error.message);
