@@ -1,8 +1,12 @@
+console.log('\n=== 🚀 CLIENT BOT ===');
+
 require('dotenv').config();
-const Redis = require('ioredis');                              // ← Новый импорт
-const redis = new Redis(process.env.REDIS_URL);                // ← Инициализация
+const Redis = require('ioredis');
+const redis = new Redis(process.env.REDIS_URL);
+
 redis.on('connect', () => console.log('✅ Redis (bot.js) подключён'));
 redis.on('error', err => console.error('❌ Redis (bot.js) ошибка:', err));
+
 
 const { Telegraf, Markup } = require('telegraf');
 const axios = require('axios');
@@ -78,7 +82,8 @@ const handleRequest = async (ctx, content) => {
 
     const requestData = {
       userId: id.toString(),
-      username: username || 'unknown',
+      type: 'firstRequest', 
+      username: username || 'Unknown',
       firstName: first_name || '',
       lastName: last_name || '',
       languageCode: language_code || '',
