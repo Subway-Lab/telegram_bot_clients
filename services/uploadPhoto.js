@@ -16,7 +16,7 @@ const uploadPhoto = async (buffer, filename, mimeType) => {
     Key: filename,
     Body: buffer,
     ContentType: mimeType,
-    ACL: 'public-read', // 👈 критично, иначе ChatGPT не увидит фото
+    ACL: 'public-read', // 👈 NODE: Критично, иначе ChatGPT не увидит фото
   });
 
   await s3.send(command);
