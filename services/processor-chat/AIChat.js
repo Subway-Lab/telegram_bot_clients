@@ -1,5 +1,6 @@
 // AIChat.js
 const { OpenAI } = require('openai');
+const Request = require('../../models/Request'); 
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -38,8 +39,29 @@ async function analyzeRequests(messageParts, imageUrls) {
     const answer = response.choices[0].message.content;
     console.log('Ответ от GPT:', answer);
     console.log('✅ Запрос обработан с', imageUrls.length, 'изображениями');
-    return answer;
-  } catch (error) {
+  
+    // Сохраняем ответ в MongoDB
+    try {
+      const newRequest = new Request({
+        type: 'Post',
+        description: answer, // Используем поле description для ответа ChatGPT
+        imageUrl: imageUrls[0], // Сохраняем первое изображение (или можно массив преобразовать в строку)
+        // Дополнительные обязательные поля:
+        userId: 'chatgpt-assistant', // Можно задать специальное значение для бота
+        username: 'chatgpt-assistant',
+        chatId: 0, // Заглушка для обязательного поля
+        isBot: true,
+        isCompleted: true,
+        // Можете добавить другие поля по необходимости
+      });
+      
+      await newRequest.save();
+      console.log('📁 Ответ успешно сохранен в MongoDB как Post');
+    } catch (dbError) {
+      console.error('❌ Ошибка сохранения в MongoDB:', dbError);
+    }
+
+  } catch (error) {  // <-- Эта закрывающая скобка была пропущена
     console.error('❌ Ошибка при обработке заявки:', error);
     throw error;
   }
