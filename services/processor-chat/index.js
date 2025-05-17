@@ -4,7 +4,7 @@ require('dotenv').config();
 const { S3Client, ListObjectsV2Command } = require('@aws-sdk/client-s3');
 const Redis = require('ioredis');
 const mongoose = require('mongoose');
-const Request = require('../../models/Request'); // проверь путь, если нужно поправить
+const Request = require('../../models/Request');
 
 const { analyzeRequests } = require('./AIChat');
 
@@ -17,17 +17,17 @@ const SPACES_KEY = process.env.SPACES_KEY;
 const SPACES_SECRET = process.env.SPACES_SECRET;
 const SPACES_BUCKET = process.env.SPACES_BUCKET;
 
-// MongoDB
+// NODE: Подключение к MongoDB
 mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ MongoDB подключена'))
   .catch(err => console.error('❌ Ошибка подключения к MongoDB:', err));
 
-// Redis
+// NODE: Подключение к Redis
 const redis = new Redis(REDIS_URL);
 redis.on('error', err => console.error('❌ Redis ошибка:', err));
 redis.on('connect', () => console.log('✅ Подключено к Redis'));
 
-// DigitalOcean Spaces (S3-совместимый)
+// NODE: Подключение к DigitalOcean Spaces
 const s3 = new S3Client({
   region: SPACES_REGION,
   endpoint: SPACES_ENDPOINT,
@@ -55,7 +55,7 @@ const s3 = new S3Client({
   }
 })();
 
-// Подписка на канал new_request
+// NODE: Подписка на канал new_request
 redis.subscribe('new_request', err => {
   if (err) {
     console.error('❌ Ошибка подписки на Redis:', err);
@@ -65,10 +65,6 @@ redis.subscribe('new_request', err => {
 });
 
 redis.on('message', async (channel, message) => {
-  console.log('🔍 Анализ полученных данных...');
-  console.log(`📩 Получено от bot.js в канале ${channel}`);
-  console.log('▶ raw payload:', message);
-
   let requests;
   try {
     requests = JSON.parse(message);
@@ -82,31 +78,46 @@ redis.on('message', async (channel, message) => {
     return;
   }
 
-  console.log(`📦 Получено ${requests.length} заявок. Детали:`);
-  requests.forEach((req, idx) => {
-    console.log(`  ${idx + 1}. description: "${req.description || '—'}", imageUrl: ${req.imageUrl || '—'}`);
-  });
-
-  const messageParts = [];
-  const imageUrls = [];
-
+  // Группируем по chatId только завершённые заявки
+  const grouped = {};
   requests.forEach(req => {
-    if (req.description) {
-      messageParts.push(`Текст: ${req.description}`);
-    }
-    if (req.imageUrl) {
-      messageParts.push(`Фото: ${req.imageUrl}`);
-      imageUrls.push(req.imageUrl);
-    }
+    if (!req.isCompleted) return;
+    if (!grouped[req.chatId]) grouped[req.chatId] = [];
+    grouped[req.chatId].push(req);
   });
 
-  console.log(`📝 Данные для GPT:\n${messageParts.join('\n')}`);
-  console.log(`🖼️ Обнаружено изображений: ${imageUrls.length}`);
+  for (const chatId in grouped) {
+    const group = grouped[chatId];
+    const messageParts = [];
+    const imageUrls = [];
+    let meta = {};
 
-  // Вызов функции из AIChat.js
-  try {
-    await analyzeRequests(messageParts, imageUrls);
-  } catch (err) {
-    // Уже залогировано внутри analyzeRequests
+    group.forEach(req => {
+      if (req.description) messageParts.push(`Текст: ${req.description}`);
+      if (req.imageUrl) {
+        messageParts.push(`Фото: ${req.imageUrl}`);
+        imageUrls.push(req.imageUrl);
+      }
+      // Сохраняем метаданные из первой заявки (или обновляйте по необходимости)
+      if (!meta.userId) {
+        meta = {
+          chatId: req.chatId,
+          userId: req.userId,
+          username: req.username,
+          firstName: req.firstName,
+          lastName: req.lastName,
+          languageCode: req.languageCode,
+        };
+      }
+    });
+
+    console.log(`📝 Данные для GPT (chatId ${chatId}):\n${messageParts.join('\n')}`);
+    console.log(`🖼️ Обнаружено изображений: ${imageUrls.length}`);
+
+    try {
+      await analyzeRequests(messageParts, imageUrls, meta);
+    } catch (err) {
+      // Уже залогировано внутри analyzeRequests
+    }
   }
 });

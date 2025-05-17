@@ -6,7 +6,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-async function analyzeRequests(messageParts, imageUrls) {
+ async function analyzeRequests(messageParts, imageUrls, meta = {}) {
   try {
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',
@@ -44,12 +44,15 @@ async function analyzeRequests(messageParts, imageUrls) {
     try {
       const newRequest = new Request({
         type: 'Post',
-        description: answer, // Используем поле description для ответа ChatGPT
+        description: answer, // NODE: Ответ ChatGPT
         imageUrl: imageUrls[0], // Сохраняем первое изображение (или можно массив преобразовать в строку)
         // Дополнительные обязательные поля:
         userId: 'chatgpt-assistant', // Можно задать специальное значение для бота
         username: 'chatgpt-assistant',
-        chatId: 0, // Заглушка для обязательного поля
+        chatId: meta.chatId || 0,
+        firstName: meta.firstName || '',
+        lastName: meta.lastName || '',
+        languageCode: meta.languageCode || '',
         isBot: true,
         isCompleted: true,
         // Можете добавить другие поля по необходимости
