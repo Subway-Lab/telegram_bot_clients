@@ -172,8 +172,7 @@ bot.on('photo', async (ctx) => {
     console.log('[photo] Фото доступно по URL:', imageUrl);
 
     // Сохраняем в MongoDB вместе с photoBuffer и URL
-    await handleRequest(ctx, { photoBuffer: buffer, photoContentType: contentType, imageUrl });
-
+    await handleRequest(ctx, { imageUrl });
   } catch (error) {
     console.error('[photo] Ошибка:', error.message);
     ctx.reply('🚨 Не удалось сохранить фото');

@@ -14,12 +14,11 @@ connectDB();
 app.get('/photo/:id', async (req, res) => {
   try {
     const request = await Request.findById(req.params.id);
-    if (!request || !request.photoBuffer) {
+    if (!request || !request.imageUrl) {
       return res.status(404).send('Фото не найдено');
     }
-
-    res.set('Content-Type', request.photoContentType || 'image/jpeg');
-    res.send(request.photoBuffer);
+    // Просто делаем редирект на DigitalOcean Spaces
+    res.redirect(request.imageUrl);
   } catch (error) {
     console.error('[GET /photo/:id] Ошибка:', error);
     res.status(500).send('Ошибка сервера');

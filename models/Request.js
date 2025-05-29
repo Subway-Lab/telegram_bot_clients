@@ -19,8 +19,6 @@ const RequestSchema = new mongoose.Schema({
       required: false,
     },
   },
-  photoBuffer: Buffer,
-  photoContentType: String,
   imageUrl: { type: String, required: false },
   description: String,
   isCompleted: { type: Boolean, default: false },
